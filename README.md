@@ -30,8 +30,6 @@ A fully working end-to-end solution, to process incoming real-time public transp
 
 Stream Analytics will read geofencing definition from Azure SQL and check if a bus is withing a defined geofence in real-time. The results will be then stored into Azure SQL for further processing and analysis.
 
-*** DOCUMENTATION IN PROGRESS ***
-
 ## How it works
 
 The sample uses local console application to monitor Real-Time Public Transportation Data, available as [GTFS-Realtime Feed](https://gtfs.org/reference/realtime/v2/) and published by several public transportation companies like, for example, the [King County Metro](https://kingcounty.gov/depts/transportation/metro/travel-options/bus/app-center/developer-resources.aspx).
@@ -46,6 +44,8 @@ An Azure SQL database is needed. The database will not be created by the deploym
 
 The GTFS Realtime feed will give you data with some values that needs to be decoded like, for example, the `RouteId`. In order to transform such Id into something meaningful, like the Route name (eg. 221 Education Hill - Crossroads - Eastgate).
 
+In an existing Azure SQL database, run the `./sql/00-create-obejcts.sql` script to create needed tables.
+
 You can download the static data zip file from here [King County Metro GTFS Feed Zip File](https://kingcounty.gov/depts/transportation/metro/travel-options/bus/app-center/developer-resources.aspx) and then you can import it into the `dbo.Routes` table using the Import capabilities of [SQL Server Management Studio](https://docs.microsoft.com/en-us/sql/relational-databases/import-export/import-flat-file-wizard), [Azure Data Studio](https://docs.microsoft.com/en-us/sql/azure-data-studio/extensions/sql-server-import-extension) or just using BULK LOAD as in script `./sql/01-import-csv.sql`
 
 ## Deploy on Azure
@@ -53,13 +53,18 @@ You can download the static data zip file from here [King County Metro GTFS Feed
 The script `./azure-deploy.sh` will take care of everything. Make sure you set the correct values for you subscription in the `.env` file for:
 
 ```
-resourceGroup=
-appName=
-storageName=
-location=
+resourceGroup=""
+storageName=""
+location="" 
+sqlServer=""
+sqlDatabase=""
+sqlUser=""
+sqlPassword=""
+eventhubsNamespace="azdbeh1"
+storageAccount="azdbasa"
 ```
 
-The script needs has been tested on Linux Ubuntu and the [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/) or the [Cloud Shell](https://shell.azure.com/).
+The script has been tested on Linux Ubuntu and the [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/) or the [Cloud Shell](https://shell.azure.com/).
 
 The following resources will be created for you:
 
@@ -67,11 +72,16 @@ The following resources will be created for you:
 - Azure Storage Account
 - Azure Stream Analytics
 
-The Azure SQL DB *will not* be created by the script.
-
 ## Run the GTFS to Event Hub application 
 
-TDB
+To start to send data to Event Hubs, run the application in `./eh-gtfs` folder. Before running the application make sure to create a `./eh-gtfs/.env` file (from the provided template) and specify the correct value for the `EventHubConnectionString` setting. The value is the Event Hub *namespace* connection string. If you deployed the sample using the provided `./azure-deploy.sh` script, such connection string is shown at the end of the script execution.
+
+```bash
+cd ./eh-gtfs
+dotnet run
+```
+
+The application will connect to King County Metro public data feed and send it to Event Hubs to simulate a stream of geospatial data.
 
 If you want something working 100% on Azure, without the need to run something locally, you can re-write the provided code as Azure Function or deploy the existing console application into an Azure Container Instance
 
