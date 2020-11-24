@@ -1,0 +1,278 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "eventhubsNamespace": {
+            "type": "String"
+        },
+        "storageAccount": {
+            "type": "String"
+        },
+        "asaJobName": {
+            "defaultValue": "azdbasajob",
+            "type": "String"
+        },
+        "location": {
+            "type": "String"        
+        },
+        "sqlServer": {
+            "type": "String"                
+        },
+        "sqlDatabase": {
+            "type": "String"                
+        },
+        "sqlUser": {
+            "type": "String"                
+        },
+        "sqlPassword": {
+            "type": "SecureString"                
+        }
+    },   
+    "resources": [
+        {
+            "type": "Microsoft.EventHub/namespaces",
+            "apiVersion": "2018-01-01-preview",
+            "name": "[parameters('eventhubsNamespace')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard",
+                "tier": "Standard",
+                "capacity": 1
+            },
+            "properties": {
+                "zoneRedundant": false,
+                "isAutoInflateEnabled": false,
+                "maximumThroughputUnits": 0,
+                "kafkaEnabled": true
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2020-08-01-preview",
+            "name": "[parameters('storageAccount')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": true,
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                },
+                "accessTier": "Hot"
+            }
+        },
+        {
+            "type": "Microsoft.StreamAnalytics/streamingjobs",
+            "apiVersion": "2017-04-01-preview",
+            "name": "[parameters('asaJobName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount'))]"
+            ],
+            "properties": {
+                "sku": {
+                    "name": "Standard"
+                },
+                "eventsOutOfOrderPolicy": "Adjust",
+                "outputErrorPolicy": "Stop",
+                "eventsOutOfOrderMaxDelayInSeconds": 0,
+                "eventsLateArrivalMaxDelayInSeconds": 5,
+                "dataLocale": "en-US",
+                "compatibilityLevel": "1.2",
+                "jobStorageAccount": {
+                    "authenticationMode": "ConnectionString",
+                    "accountName": "[parameters('storageAccount')]",
+                    "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount')), '2020-08-01-preview').keys[0].value]"
+                },
+                "jobType": "Cloud"
+            }
+        },
+        {
+            "type": "Microsoft.EventHub/namespaces/eventhubs",
+            "apiVersion": "2017-04-01",
+            "name": "[concat(parameters('eventhubsNamespace'), '/Realtime')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', parameters('eventhubsNamespace'))]"
+            ],
+            "properties": {
+                "messageRetentionInDays": 1,
+                "partitionCount": 1,
+                "status": "Active"
+            }
+        },
+        {
+            "type": "Microsoft.EventHub/namespaces/networkRuleSets",
+            "apiVersion": "2018-01-01-preview",
+            "name": "[concat(parameters('eventhubsNamespace'), '/default')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', parameters('eventhubsNamespace'))]"
+            ],
+            "properties": {
+                "defaultAction": "Allow",
+                "virtualNetworkRules": [],
+                "ipRules": []
+            }
+        },
+        {
+            "type": "Microsoft.StreamAnalytics/streamingjobs/inputs",
+            "apiVersion": "2017-04-01-preview",
+            "name": "[concat(parameters('asaJobName'), '/GeoFences')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.StreamAnalytics/streamingjobs', parameters('asaJobName'))]"
+            ],
+            "properties": {
+                "type": "Reference",
+                "datasource": {
+                    "type": "Microsoft.Sql/Server/Database",
+                    "properties": {
+                        "fullSnapshotQuery": "select Id, [Name], [GeoFence].ToString() as GeoFence from dbo.[GeoFences]",
+                        "refreshType": "RefreshPeriodicallyWithFull",
+                        "refreshRate": "00:01:00",
+                        "server": "[parameters('sqlServer')]", 
+                        "database": "[parameters('sqlDatabase')]",
+                        "password": "[parameters('sqlPassword')]",
+                        "user": "[parameters('sqlUser')]",
+                        "authenticationMode": "ConnectionString"
+                    }
+                },
+                "compression": {
+                    "type": "None"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.StreamAnalytics/streamingjobs/inputs",
+            "apiVersion": "2017-04-01-preview",
+            "name": "[concat(parameters('asaJobName'), '/Realtime')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', parameters('eventhubsNamespace'))]",
+                "[resourceId('Microsoft.StreamAnalytics/streamingjobs', parameters('asaJobName'))]"
+            ],
+            "properties": {
+                "type": "Stream",
+                "datasource": {
+                    "type": "Microsoft.EventHub/EventHub",
+                    "properties": {
+                        "eventHubName": "Realtime",
+                        "serviceBusNamespace": "[parameters('eventhubsNamespace')]",
+                        "sharedAccessPolicyName": "RootManageSharedAccessKey",
+                        "sharedAccessPolicyKey": "[listKeys(resourceId('Microsoft.EventHub/namespaces/authorizationRules', parameters('eventhubsNamespace'), 'RootManageSharedAccessKey'), '2017-04-01').primaryKey]",
+                        "authenticationMode": "ConnectionString"
+                    }
+                },
+                "compression": {
+                    "type": "None"
+                },
+                "serialization": {
+                    "type": "Json",
+                    "properties": {
+                        "encoding": "UTF8"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.StreamAnalytics/streamingjobs/inputs",
+            "apiVersion": "2017-04-01-preview",
+            "name": "[concat(parameters('asaJobName'), '/RouteNames')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.StreamAnalytics/streamingjobs', parameters('asaJobName'))]"
+            ],
+            "properties": {
+                "type": "Reference",
+                "datasource": {
+                    "type": "Microsoft.Sql/Server/Database",
+                    "properties": {
+                        "fullSnapshotQuery": "select Id, ShortName, [Description] from [dbo].[Routes]",
+                        "refreshType": "RefreshPeriodicallyWithFull",
+                        "refreshRate": "00:01:00",
+                        "server": "[parameters('sqlServer')]", 
+                        "database": "[parameters('sqlDatabase')]",
+                        "password": "[parameters('sqlPassword')]",
+                        "user": "[parameters('sqlUser')]",
+                        "authenticationMode": "ConnectionString"
+                    }
+                },
+                "compression": {
+                    "type": "None"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.StreamAnalytics/streamingjobs/outputs",
+            "apiVersion": "2017-04-01-preview",
+            "name": "[concat(parameters('asaJobName'), '/BusDataOutput')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.StreamAnalytics/streamingjobs', parameters('asaJobName'))]"
+            ],
+            "properties": {
+                "datasource": {
+                    "type": "Microsoft.Sql/Server/Database",
+                    "properties": {
+                        "maxWriterCount": 1,
+                        "maxBatchCount": 10000,
+                        "table": "dbo.BusDataOutput",
+                        "server": "[parameters('sqlServer')]", 
+                        "database": "[parameters('sqlDatabase')]",
+                        "password": "[parameters('sqlPassword')]",
+                        "user": "[parameters('sqlUser')]",
+                        "authenticationMode": "ConnectionString"
+                    }
+                }               
+            }
+        },
+        {
+            "type": "Microsoft.StreamAnalytics/streamingjobs/transformations",
+            "apiVersion": "2017-04-01-preview",
+            "name": "[concat(parameters('asaJobName'), '/Transformation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.StreamAnalytics/streamingjobs', parameters('asaJobName'))]"
+            ],
+            "properties": {
+                "streamingUnits": 6,
+                "query": "SELECT 
+    rt.Id, 
+    rt.RouteId, 
+    rt.VehicleId, 
+    rt.DirectionId, 
+    rt.Position.Latitude, 
+    rt.Position.Longitude, 
+    rt.TimestampUTC, 
+    r.ShortName as [RouteShortName], 
+    r.Description as [RouteLongName], 
+    g.Id as GeoFenceId 
+INTO 
+    BusDataOutput 
+FROM
+    Realtime AS rt 
+LEFT OUTER JOIN 
+    RouteNames AS r ON rt.RouteId = r.Id 
+LEFT OUTER JOIN 
+    GeoFences AS g ON ST_WITHIN(CreatePoint(rt.Position.Latitude, rt.Position.Longitude), g.GeoFence) = 1"
+            }        
+        }               
+    ]
+}

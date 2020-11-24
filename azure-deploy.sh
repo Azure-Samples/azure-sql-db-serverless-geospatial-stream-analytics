@@ -4,22 +4,28 @@ set -euo pipefail
 
 # Requirements: 
 # - AZ CLI: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest
-# - jq: https://stedolan.github.io/jq/download/
 
-# Make sure these values are correct for your environment
-resourceGroup="dm-catch-the-bus"
-appName="dm-catch-the-bus"
-storageName="dmctb"
-location="WestUS2" 
-
-# Change this if you are using your own github repository
-gitSource="https://github.com/Azure-Samples/azure-sql-db-serverless-geospatial"
-
-# Check that local.settings.json exists
-settingsFile="./local.settings.json"
-if ! [ -f $settingsFile ]; then
-    echo "$settingsFile does not exists. Please create it."
-    exit
+# Azure configuration
+FILE=".env"
+if [[ -f $FILE ]]; then
+	echo "Loading from .env" 
+    export $(egrep . $FILE | xargs -n1)
+else
+	cat << EOF > .env
+resourceGroup=""
+storageName=""
+location=""
+sqlServer=""
+sqlDatabase=""
+sqlUser=""
+sqlPassword=""
+eventhubsNamespace="azdbeh1"
+storageAccount="azdbasa"
+EOF
+	echo "Enviroment file not detected."
+	echo "Please configure values for your environment in the created .env file"
+	echo "and run the script again."
+	exit 1
 fi
 
 echo "Creating Resource Group...";
@@ -27,41 +33,26 @@ az group create \
     -n $resourceGroup \
     -l $location
 
-echo "Creating Application Insight..."
-az resource create \
+echo "Deploying ARM template...";
+az deployment group create \
     -g $resourceGroup \
-    -n $appName-ai \
-    --resource-type "Microsoft.Insights/components" \
-    --properties '{"Application_Type":"web"}'
+    --template-file ./azure-resources.json \
+    --parameters location=$location \
+    --parameters sqlServer=$sqlServer \
+    --parameters sqlDatabase=$sqlDatabase \
+    --parameters sqlUser=$sqlUser \
+    --parameters sqlPassword=$sqlPassword \
+    --parameters eventhubsNamespace=$eventhubsNamespace \
+    --parameters storageAccount=$storageAccount
 
-echo "Reading Application Insight Key..."
-aikey=`az resource show -g $resourceGroup -n $appName-ai --resource-type "Microsoft.Insights/components" --query properties.InstrumentationKey -o tsv`
-
-echo "Creating Storage Account...";
-az storage account create \
+echo "Event Hubs Connection String"
+ az eventhubs namespace authorization-rule keys list \
+    -n RootManageSharedAccessKey \
+    --namespace-name $eventhubsNamespace \
     -g $resourceGroup \
-    -l $location \
-    -n $storageName \
-    --sku Standard_LRS
+    --query "primaryConnectionString"
 
-echo "Creating Function App...";
-az functionapp create \
-    -g $resourceGroup \
-    -n $appName \
-    --storage-account $storageName \
-    --app-insights-key $aikey \
-    --consumption-plan-location $location \
-    --deployment-source-url $gitSource \
-    --deployment-source-branch main \
-    --functions-version 3 \
-    --os-type Windows
 
-echo "Configuring Settings...";
-settings=(RealTimeFeedUrl AzureSQLConnectionString)
-for i in "${settings[@]}"
-do
-    v=`cat $settingsFile | jq .Values.$i -r`
-    c="az functionapp config appsettings set -g $resourceGroup -n $appName --settings $i='$v'"
-    #echo $c
-	eval $c
-done
+
+    
+

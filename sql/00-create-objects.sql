@@ -1,5 +1,5 @@
 /*
-	BusData
+	BusDataOutput
 */
 drop table if exists dbo.BusDataOutput;
 create table dbo.BusDataOutput
