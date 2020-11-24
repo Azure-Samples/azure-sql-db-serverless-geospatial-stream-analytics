@@ -27,7 +27,7 @@ namespace GTFS_To_EH
             await SendToEventHub(bd);
             Console.WriteLine("Done.");
 
-            await Task.Delay(10000);
+            await Task.Delay(15000);
         }
 
         private async Task<Feed> DownloadBusData()
