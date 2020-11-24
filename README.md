@@ -28,7 +28,7 @@ Taxonomies for products and languages: https://review.docs.microsoft.com/new-hop
 
 A fully working end-to-end solution, to process incoming real-time public transportation data by sending them to Event Hub and then processing the stream using Stream Analytics and Azure SQL.
 
-Stream Analytics will read geofencing definition from Azure SQL and check if a bus is withing a defined geofence in real-time. The results will be then stored into Azure SQL for further processing and analysis.
+Stream Analytics will read geofencing definition from Azure SQL and check if a bus is withing a defined geofence in real-time. The results will be then stored into Azure SQL for further processing and analysis. 
 
 ## How it works
 
