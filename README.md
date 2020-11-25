@@ -6,6 +6,7 @@ languages:
 - csharp
 products:
 - azure-sql-database
+- azure-stream-analytics
 - azure
 - dotnet
 - dotnet-core
