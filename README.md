@@ -10,7 +10,7 @@ products:
 - dotnet
 - dotnet-core
 description: "Monitor GeoFences in real-time using Azure SQL and Stream Analytics"
-urlFragment: "https://github.com/Azure-Samples/azure-sql-db-serverless-geospatial-stream-analytics"
+urlFragment: "azure-sql-db-serverless-geospatial-stream-analytics"
 ---
 
 # Monitor GeoFences in real-time using Azure SQL and Stream Analytics
