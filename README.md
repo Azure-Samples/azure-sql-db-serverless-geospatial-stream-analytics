@@ -7,7 +7,6 @@ languages:
 products:
 - azure-sql-database
 - azure
-- azure-stream-analytics
 - dotnet
 - dotnet-core
 description: "Monitor GeoFences in real-time using Azure SQL and Stream Analytics"
