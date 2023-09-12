@@ -9,7 +9,6 @@ products:
 - azure-stream-analytics
 - azure
 - dotnet
-- dotnet-core
 description: "Monitor GeoFences in real-time using Azure SQL and Stream Analytics"
 urlFragment: "azure-sql-db-serverless-geospatial-stream-analytics"
 ---
